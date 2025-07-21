@@ -1,0 +1,46 @@
+# Swift Package Manager build artifacts
+.build/
+.swiftpm/
+
+# Xcode build artifacts and user data
+DerivedData/
+build/
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+
+# IDE settings
+.idea/
+*.iml
+
+# macOS system files
+.DS_Store
+
+# Archives and debug symbols
+*.xcarchive
+*.dSYM.zip
+*.dSYM
+
+# Logs
+*.log
+
+# Local test/example apps (if any)
+ExampleApp/
+Tests/
+
+# Package.resolved (ignore lockfile for libraries)
+Package.resolved
+
+# CocoaPods, Carthage, Fastlane (if not used, safe to ignore)
+Pods/
+Carthage/Build/
+fastlane/
+
+# Misc
+*.orig
+*.moved-aside
+*.swp
