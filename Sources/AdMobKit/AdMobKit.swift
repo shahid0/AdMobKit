@@ -10,29 +10,25 @@ import GoogleMobileAds
 import SwiftUI
 import UIKit
 
-/**
- AdMobKit: A SwiftUI library for integrating Google AdMob ads (Banner, Interstitial, Rewarded, App Open, and Native) into your iOS apps with minimal setup.
-
- - Supports: Banner, Interstitial, Rewarded, Rewarded Interstitial, App Open, and Native ads.
- - SwiftUI and UIKit compatible.
- - Includes customizable native ad views and easy-to-use view models.
-*/
-/**
- BannerAdView displays a Google AdMob banner ad in SwiftUI.
-
- Usage:
- ```swift
- BannerAdView(AdUnitID: "your-banner-unit-id")
-     .frame(height: 60)
- ```
- - Parameter AdUnitID: Your AdMob banner ad unit ID.
- - Parameter adLoadFailed: Optional binding to observe ad load failure.
-*/
+/// AdMobKit: A SwiftUI library for integrating Google AdMob ads (Banner, Interstitial, Rewarded, App Open, and Native) into your iOS apps with minimal setup.
+///
+/// - Supports: Banner, Interstitial, Rewarded, Rewarded Interstitial, App Open, and Native ads.
+/// - SwiftUI and UIKit compatible.
+/// - Includes customizable native ad views and easy-to-use view models.
+/// BannerAdView displays a Google AdMob banner ad in SwiftUI.
+///
+/// Usage:
+/// ```swift
+/// BannerAdView(AdUnitID: "your-banner-unit-id")
+///     .frame(height: 60)
+/// ```
+/// - Parameter AdUnitID: Your AdMob banner ad unit ID.
+/// - Parameter adLoadFailed: Optional binding to observe ad load failure.
 public struct BannerAdView: View {
     /// The AdMob banner ad unit ID.
     public let AdUnitID: String
     /// Binding to observe ad load failure.
-    @Binding public var adLoadFailed: Bool
+    @Binding public var adPhase: BannerLifecycleEvent
     /**
      Initialize a BannerAdView.
      - Parameters:
@@ -41,10 +37,10 @@ public struct BannerAdView: View {
     */
     public init(
         AdUnitID: String,
-        adLoadFailed: Binding<Bool> = .constant(false)
+        adPhase: Binding<BannerLifecycleEvent> = .constant(.idle)
     ) {
         self.AdUnitID = AdUnitID
-        self._adLoadFailed = adLoadFailed
+        self._adPhase = adPhase
     }
     /// SwiftUI body for the banner ad.
     public var body: some View {
@@ -56,7 +52,7 @@ public struct BannerAdView: View {
                 BannerViewContainer(
                     for: AdUnitID,
                     adSize,
-                    adLoadFailed: $adLoadFailed
+                    adPhase: $adPhase
                 )
             }
         }
@@ -68,17 +64,22 @@ private struct BannerViewContainer: UIViewRepresentable {
 
     let AdUnitId: String
     let adSize: AdSize
-    @Binding var adLoadFailed: Bool
+    @Binding var adPhase: BannerLifecycleEvent
 
-    init(for AdUnitId: String, _ adSize: AdSize, adLoadFailed: Binding<Bool>) {
+    init(
+        for AdUnitId: String,
+        _ adSize: AdSize,
+        adPhase: Binding<BannerLifecycleEvent>
+    ) {
         self.adSize = adSize
         self.AdUnitId = AdUnitId
-        self._adLoadFailed = adLoadFailed
+        self._adPhase = adPhase
     }
 
     func makeUIView(context: Context) -> BannerView {
         let banner = BannerView(adSize: adSize)
         // [START load_ad]
+        adPhase = .loading
         banner.adUnitID = AdUnitId
         banner.load(Request())
         // [END load_ad]
@@ -109,7 +110,7 @@ private struct BannerViewContainer: UIViewRepresentable {
         func bannerViewDidReceiveAd(_ bannerView: BannerView) {
             print("DID RECEIVE AD.")
             DispatchQueue.main.async {
-                self.parent.adLoadFailed = false
+                self.parent.adPhase = .loaded
                 bannerView.isHidden = false
             }
         }
@@ -120,16 +121,22 @@ private struct BannerViewContainer: UIViewRepresentable {
         ) {
             print("FAILED TO RECEIVE AD: \(error.localizedDescription)")
             DispatchQueue.main.async {
-                self.parent.adLoadFailed = true
+                self.parent.adPhase = .failed(error)
             }
         }
 
         func bannerViewDidRecordImpression(_ bannerView: BannerView) {
             print(#function)
+            DispatchQueue.main.async {
+                self.parent.adPhase = .impression
+            }
         }
 
         func bannerViewDidRecordClick(_ bannerView: BannerView) {
             print(#function)
+            DispatchQueue.main.async {
+                self.parent.adPhase = .click
+            }
         }
     }
 }
@@ -138,17 +145,13 @@ public class InterstitialViewModel: NSObject, ObservableObject,
     FullScreenContentDelegate
 {
     private var interstitialAd: InterstitialAd?
-    @Published public var onAdLoadComplete: (() -> Void)?
-    @Published public var onAdDismiss: (() -> Void)?
-    @Published public var onAdDismissed: (() -> Void)?
-
-    public var isLoading = false
+    @Published public var adPhase: FullScreenLifecycleEvent = .idle
 
     public override init() { super.init() }
 
     public func loadAd(adUnitID: String) async {
-        guard !isLoading, interstitialAd == nil else { return }
-        isLoading = true
+        guard !(adPhase == .loading), interstitialAd == nil else { return }
+        adPhase = .loading
         do {
             interstitialAd = try await InterstitialAd.load(
                 with: adUnitID,
@@ -156,24 +159,24 @@ public class InterstitialViewModel: NSObject, ObservableObject,
             )
 
             interstitialAd?.fullScreenContentDelegate = self
+            adPhase = .loaded
         } catch {
             print(
                 "Failed to load interstitial ad with error: \(error.localizedDescription)"
             )
         }
-        isLoading = false
-        onAdLoadComplete?()
     }
     // [END load_ad]
 
     // [START show_ad]
     public func showAd() {
-        guard !isLoading else {
+        guard !(adPhase == .loading) else {
             return print("is Loading Ad")
         }
-        guard let interstitialAd = interstitialAd else {
-            onAdDismiss?()
-            return print("Ad wasn't ready.")
+        guard let interstitialAd = interstitialAd, adPhase != .presenting else {
+            return print(
+                "Cant not show ad (Ready: \(interstitialAd != nil)\n(Presenting: \(adPhase == .presenting))."
+            )
         }
 
         interstitialAd.present(from: nil)
@@ -185,10 +188,16 @@ public class InterstitialViewModel: NSObject, ObservableObject,
     // [START ad_events]
     public func adDidRecordImpression(_ ad: FullScreenPresentingAd) {
         print("\(#function) called")
+        DispatchQueue.main.async {
+            self.adPhase = .impression
+        }
     }
 
     public func adDidRecordClick(_ ad: FullScreenPresentingAd) {
         print("\(#function) called")
+        DispatchQueue.main.async {
+            self.adPhase = .click
+        }
     }
 
     public func ad(
@@ -196,23 +205,32 @@ public class InterstitialViewModel: NSObject, ObservableObject,
         didFailToPresentFullScreenContentWithError error: Error
     ) {
         print("\(#function) called")
-        onAdDismiss?()
+        DispatchQueue.main.async {
+            self.adPhase = .failed(error)
+        }
     }
 
     public func adWillPresentFullScreenContent(_ ad: FullScreenPresentingAd) {
         print("\(#function) called")
+        DispatchQueue.main.async {
+            self.adPhase = .presenting
+        }
     }
 
     public func adWillDismissFullScreenContent(_ ad: FullScreenPresentingAd) {
         print("\(#function) called")
-        onAdDismiss?()
+        DispatchQueue.main.async {
+            self.adPhase = .willDismiss
+        }
     }
 
     public func adDidDismissFullScreenContent(_ ad: FullScreenPresentingAd) {
         print("\(#function) called")
         // Clear the interstitial ad.
         interstitialAd = nil
-        onAdDismissed?()
+        DispatchQueue.main.async {
+            self.adPhase = .didDismiss
+        }
     }
     // [END ad_events]
 }
@@ -222,14 +240,13 @@ public class RewardedViewModel: NSObject, ObservableObject,
 {
     @Published public var coins = 0
     private var rewardedAd: RewardedAd?
-    
-    @Published public var onAdLoadComplete: (() -> Void)?
-    @Published public var onAdDismiss: (() -> Void)?
-    @Published public var onAdDismissed: (() -> Void)?
+    @Published public var adPhase: RewardedLifecycleEvent = .idle
 
     public override init() { super.init() }
 
     public func loadAd(adUnitID: String) async {
+        guard !(adPhase == .loading), rewardedAd == nil else { return }
+        adPhase = .loading
         do {
             rewardedAd = try await RewardedAd.load(
                 with: adUnitID,
@@ -237,31 +254,40 @@ public class RewardedViewModel: NSObject, ObservableObject,
             )
             // [START set_the_delegate]
             rewardedAd?.fullScreenContentDelegate = self
+            adPhase = .loaded
             // [END set_the_delegate]
         } catch {
             print(
                 "Failed to load rewarded ad with error: \(error.localizedDescription)"
             )
         }
-        onAdLoadComplete?()
     }
     // [END load_ad]
 
     // [START show_ad]
     public func showAd() {
-        guard let rewardedAd = rewardedAd else {
-            return print("Ad wasn't ready.")
+        guard !(adPhase == .loading) else {
+            return print("ad is Loading")
         }
-
+        guard let rewardedAd = rewardedAd, adPhase != .presenting else {
+            return print(
+                "Cant not show ad (Ready: \(rewardedAd != nil)\n(Presenting: \(adPhase == .presenting))."
+            )
+        }
+        
         rewardedAd.present(from: nil) {
             let reward = rewardedAd.adReward
             print("Reward amount: \(reward.amount)")
             self.addCoins(reward.amount.intValue)
+
         }
     }
     // [END show_ad]
 
     func addCoins(_ amount: Int) {
+        DispatchQueue.main.async {
+            self.adPhase = .reward(amount: amount)
+        }
         coins += amount
     }
 
@@ -269,10 +295,16 @@ public class RewardedViewModel: NSObject, ObservableObject,
 
     // [START ad_events]
     public func adDidRecordImpression(_ ad: FullScreenPresentingAd) {
+        DispatchQueue.main.async {
+            self.adPhase = .impression
+        }
         print("\(#function) called")
     }
 
     public func adDidRecordClick(_ ad: FullScreenPresentingAd) {
+        DispatchQueue.main.async {
+            self.adPhase = .click
+        }
         print("\(#function) called")
     }
 
@@ -280,23 +312,32 @@ public class RewardedViewModel: NSObject, ObservableObject,
         _ ad: FullScreenPresentingAd,
         didFailToPresentFullScreenContentWithError error: Error
     ) {
-        onAdDismiss?()
+        DispatchQueue.main.async {
+            self.adPhase = .failed(error)
+        }
         print("\(#function) called")
     }
 
     public func adWillPresentFullScreenContent(_ ad: FullScreenPresentingAd) {
+        DispatchQueue.main.async {
+            self.adPhase = .presenting
+        }
         print("\(#function) called")
     }
 
     public func adWillDismissFullScreenContent(_ ad: FullScreenPresentingAd) {
-        onAdDismiss?()
+        DispatchQueue.main.async {
+            self.adPhase = .willDismiss
+        }
         print("\(#function) called")
     }
 
     public func adDidDismissFullScreenContent(_ ad: FullScreenPresentingAd) {
-        onAdDismissed?()
+        DispatchQueue.main.async {
+            self.adPhase = .didDismiss
+        }
         print("\(#function) called")
-        
+
         // Clear the rewarded ad.
         rewardedAd = nil
     }
@@ -307,14 +348,16 @@ public class RewardedInterstitialViewModel: NSObject, ObservableObject,
 {
     @Published public var coins = 0
     private var rewardedInterstitialAd: RewardedInterstitialAd?
-    
-    @Published public var onAdLoadComplete: (() -> Void)?
-    @Published public var onAdDismiss: (() -> Void)?
-    @Published public var onAdDismissed: (() -> Void)?
-    
+
+    @Published public var adPhase: RewardedLifecycleEvent = .idle
+
     public override init() { super.init() }
 
     public func loadAd(adUnitID: String) async {
+        guard !(adPhase == .loading), rewardedInterstitialAd == nil else {
+            return
+        }
+        adPhase = .loading
         do {
             rewardedInterstitialAd = try await RewardedInterstitialAd.load(
                 with: adUnitID,
@@ -322,22 +365,28 @@ public class RewardedInterstitialViewModel: NSObject, ObservableObject,
             )
             // [START set_the_delegate]
             rewardedInterstitialAd?.fullScreenContentDelegate = self
+            adPhase = .loaded
             // [END set_the_delegate]
         } catch {
             print(
                 "Failed to load rewarded interstitial ad with error: \(error.localizedDescription)"
             )
         }
-        onAdLoadComplete?()
     }
     // [END load_ad]
 
     // [START show_ad]
     public func showAd() {
-        guard let rewardedInterstitialAd = rewardedInterstitialAd else {
-            return print("Ad wasn't ready.")
+        guard !(adPhase == .loading) else {
+            return print("ad is Loading")
         }
-
+        guard let rewardedInterstitialAd = rewardedInterstitialAd,
+            adPhase != .presenting
+        else {
+            return print(
+                "Cant not show ad (Ready: \(rewardedInterstitialAd != nil)\n(Presenting: \(adPhase == .presenting))."
+            )
+        }
         rewardedInterstitialAd.present(from: nil) {
             let reward = rewardedInterstitialAd.adReward
             print("Reward amount: \(reward.amount)")
@@ -347,6 +396,9 @@ public class RewardedInterstitialViewModel: NSObject, ObservableObject,
     // [END show_ad]
 
     func addCoins(_ amount: Int) {
+        DispatchQueue.main.async {
+            self.adPhase = .reward(amount: amount)
+        }
         coins += amount
     }
 
@@ -354,9 +406,15 @@ public class RewardedInterstitialViewModel: NSObject, ObservableObject,
 
     // [START ad_events]
     public func adDidRecordImpression(_ ad: FullScreenPresentingAd) {
+        DispatchQueue.main.async {
+            self.adPhase = .impression
+        }
         print("\(#function) called")
     }
     public func adDidRecordClick(_ ad: FullScreenPresentingAd) {
+        DispatchQueue.main.async {
+            self.adPhase = .click
+        }
         print("\(#function) called")
     }
 
@@ -364,22 +422,31 @@ public class RewardedInterstitialViewModel: NSObject, ObservableObject,
         _ ad: FullScreenPresentingAd,
         didFailToPresentFullScreenContentWithError error: Error
     ) {
-        onAdDismiss?()
+        DispatchQueue.main.async {
+            self.adPhase = .failed(error)
+        }
         print("\(#function) called")
     }
 
     public func adWillPresentFullScreenContent(_ ad: FullScreenPresentingAd) {
+        DispatchQueue.main.async {
+            self.adPhase = .presenting
+        }
         print("\(#function) called")
     }
 
     public func adWillDismissFullScreenContent(_ ad: FullScreenPresentingAd) {
-        onAdDismiss?()
+        DispatchQueue.main.async {
+            self.adPhase = .willDismiss
+        }
         print("\(#function) called")
     }
 
     public func adDidDismissFullScreenContent(_ ad: FullScreenPresentingAd) {
         print("\(#function) called")
-        onAdDismissed?()
+        DispatchQueue.main.async {
+            self.adPhase = .didDismiss
+        }
         // Clear the rewarded interstitial ad.
         rewardedInterstitialAd = nil
     }
@@ -390,21 +457,21 @@ public class AppOpenAdManager: NSObject, FullScreenContentDelegate,
     ObservableObject
 {
     private var appOpenAd: AppOpenAd?
-    public var isLoadingAd = false
-    public var isShowingAd = false
     public var loadTime: Date?
     public let fourHoursInSeconds = TimeInterval(3600 * 4)
     public static var isInProScreen = false
+   
+    @Published public var adPhase: FullScreenLifecycleEvent = .idle
     // ...
 
     public override init() { super.init() }
 
     public func loadAd(adUnitID: String) async {
         // Do not load ad if there is an unused ad or one is already loading.
-        if isLoadingAd || isAdAvailable() || Self.isInProScreen {
+        if adPhase == .loading || isAdAvailable() || Self.isInProScreen {
             return
         }
-        isLoadingAd = true
+        adPhase = .loading
 
         do {
             appOpenAd = try await AppOpenAd.load(
@@ -413,29 +480,19 @@ public class AppOpenAdManager: NSObject, FullScreenContentDelegate,
             )
             appOpenAd?.fullScreenContentDelegate = self
             loadTime = Date()
+            adPhase = .loaded
         } catch {
             print(
                 "App open ad failed to load with error: \(error.localizedDescription)"
             )
         }
-        isLoadingAd = false
     }
 
     public func showAdIfAvailable() {
         // If the app open ad is already showing, do not show the ad again.
-        guard !isShowingAd, !Self.isInProScreen else { return }
-
-        // If the app open ad is not available yet but is supposed to show, load
-        // a new ad.
-        //        if !isAdAvailable() {
-        //            Task {
-        //                await loadAd()
-        //            }
-        //            return
-        //        }
+        guard adPhase != .loading, !Self.isInProScreen else { return }
 
         if let ad = appOpenAd {
-            isShowingAd = true
             ad.present(from: nil)
         }
     }
@@ -451,17 +508,38 @@ public class AppOpenAdManager: NSObject, FullScreenContentDelegate,
         return appOpenAd != nil && wasLoadTimeLessThanFourHoursAgo()
     }
 
+    public func adDidRecordImpression(_ ad: FullScreenPresentingAd) {
+        DispatchQueue.main.async {
+            self.adPhase = .impression
+        }
+        print("\(#function) called")
+    }
+    public func adDidRecordClick(_ ad: FullScreenPresentingAd) {
+        DispatchQueue.main.async {
+            self.adPhase = .click
+        }
+        print("\(#function) called")
+    }
+
     public func adWillPresentFullScreenContent(_ ad: FullScreenPresentingAd) {
+        DispatchQueue.main.async {
+            self.adPhase = .presenting
+        }
         print("App open ad will be presented.")
     }
 
     public func adDidDismissFullScreenContent(_ ad: FullScreenPresentingAd) {
         appOpenAd = nil
-        isShowingAd = false
-        // Reload an ad.
-        //        Task {
-        //            await loadAd()
-        //        }
+        DispatchQueue.main.async {
+            self.adPhase = .didDismiss
+        }
+    }
+
+    public func adWillDismissFullScreenContent(_ ad: FullScreenPresentingAd) {
+        DispatchQueue.main.async {
+            self.adPhase = .willDismiss
+        }
+        print("\(#function) called")
     }
 
     public func ad(
@@ -469,11 +547,9 @@ public class AppOpenAdManager: NSObject, FullScreenContentDelegate,
         didFailToPresentFullScreenContentWithError error: Error
     ) {
         appOpenAd = nil
-        isShowingAd = false
-        // Reload an ad.
-        //        Task {
-        //            await loadAd()
-        //        }
+        DispatchQueue.main.async {
+            self.adPhase = .failed(error)
+        }
     }
 }
 

@@ -2,8 +2,17 @@
 
 AdMobKit is a SwiftUI library for integrating Google AdMob ads (Banner, Interstitial, Rewarded, App Open, and Native) into your iOS apps with minimal setup.
 
+> ⚠️ **Notice:**  
+> **AdMobKit v2.0.0 is now released!**  
+> This documentation is for **v1.0.0** and **has not yet been updated** for the latest changes.  
+> Please refer to the [v1.0.0 tag](https://github.com/shahid0/AdMobKit/tree/1.0.0) for the version this README applies to.  
+> Full updated documentation for v2.0.0 is coming soon.
+> Example For v2.0.0 is Present inside Combine Example Folder (with onChange Example)
+
+
 ## Table of Contents
 - [Features](#features)
+- [Background](#background)
 - [Installation](#installation)
 - [Usage](#usage)
   - [Banner Ad](#banner-ad-with-adloadfailed-binding-and-dynamic-height)
@@ -29,13 +38,30 @@ AdMobKit is a SwiftUI library for integrating Google AdMob ads (Banner, Intersti
 - Easy-to-use view models and SwiftUI wrappers
 - Includes XIB and media assets for native ad rendering
 
+## Background
+
+As a developer who started directly with **SwiftUI**, integrating Google AdMob into my apps was far from straightforward. I had **no experience with UIKit**, and setting up ad formats like interstitials, rewarded ads, or especially native ads was **frustrating**. Most of the available resources and SDK examples were either UIKit-based or overly complicated, which made it hard to implement cleanly in a SwiftUI-first codebase.
+
+I initially built my own ad integration system for personal use — copy-pasting code between projects, trying to make sense of `UIViewControllerRepresentable`, and managing boilerplate setup across apps. Even using Google's official documentation felt out of reach for someone who just transitioned from **React/Next.js and C++** to Swift and SwiftUI.
+
+Eventually, I decided to **wrap everything into a reusable Swift Package**, so I could just drop in a banner, interstitial, or rewarded ad the same way I’d use any other SwiftUI view. No hacks. No UIViewControllers. Just `.task { await viewModel.loadAd(...) }` and move on.
+
+That’s how **AdMobKit** was born — a lightweight SwiftUI-first library designed to make **ad integration feel native to SwiftUI**.
+
+It’s built for developers like me, and I use it across all my own apps. I decided to open-source it because I believe in **sharing practical tools**, and I hope others will contribute to help **make this more robust and eventually earn a place in official AdMob integration guides**.
+
+There was an older SwiftUI-based AdMob wrapper I saw when I first started, which inspired me to publish my own — this time updated for the **latest AdMob SDK**, more flexible, and more idiomatic for SwiftUI developers.
+
+I welcome contributions, feedback, and ideas to help maintain and grow this project together.
+
+
 ## Installation
 
 ### Swift Package Manager
 Add this package to your `Package.swift`:
 
 ```
-.package(url: "<your-repo-url>", from: "1.0.0")
+.package(url: "https://github.com/shahid0/AdMobKit.git", from: "1.0.0")
 ```
 
 Or use Xcode's "Add Package" feature.
@@ -48,8 +74,9 @@ Or use Xcode's "Add Package" feature.
 ### Banner Ad (with adLoadFailed binding and dynamic height)
 ```swift
 @State private var bannerAdLoadFailed = false
+
 BannerAdView(AdUnitID: "your-banner-unit-id", adLoadFailed: $bannerAdLoadFailed)
-    .frame(height: bannerAdLoadFailed ? 0 : .infinity) // Hide banner if load fails
+    .frame(maxHeight: bannerAdLoadFailed ? 0 : .infinity) // Hide banner if load fails
 // You can use your own logic for hiding or resizing the banner.
 ```
 
@@ -141,8 +168,10 @@ Set `AppOpenAdManager.isInProScreen = true` when your paywall or in-app purchase
 ### Native Ad (loading and showing)
 ```swift
 @StateObject var nativeVM = NativeAdViewModel(adUnitID: "your-native-unit-id")
+
 // Load ad
 .task { nativeVM.refreshAd() }
+
 // Show ad
 GoogleNativeAdView(nativeViewModel: nativeVM, style: .card)
     .frame(height: 380)

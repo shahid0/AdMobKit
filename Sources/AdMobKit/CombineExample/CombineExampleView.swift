@@ -1,13 +1,15 @@
 //
-//  SwiftUIView.swift
+//  AdsView.swift
 //  AdMobKit
 //
-//  Created by mac on 21/07/2025.
+//  Created by mac on 28/07/2025.
 //
 
-import SwiftUI
 
-struct AdsView: View {
+import SwiftUI
+import Combine
+
+struct CombineAdsView: View {
     @StateObject var interstitialVM = InterstitialViewModel()
     @StateObject var rewardedVM = RewardedViewModel()
     @StateObject var rewardedInterstitalVM = RewardedInterstitialViewModel()
@@ -15,9 +17,13 @@ struct AdsView: View {
         adUnitID: "ca-app-pub-3940256099942544/3986624511",
         requestInterval: 1
     )
-    @State private var hiddenNative = false
-    @State private var bannerAdPhase = BannerLifecycleEvent.idle
     @StateObject var appOpenVM = AppOpenAdManager()
+    @State private var bannerAdPhase = BannerLifecycleEvent.idle
+
+    // Combine observer storage
+    @State private var rewardedObserver: RewardedAdObserver?
+    @State private var interstitialObserver: InterstitialAdObserver?
+
     var body: some View {
         VStack {
             Button("reload native") {
@@ -29,12 +35,11 @@ struct AdsView: View {
             }
 
             if !nativeViewModel.isLoading && nativeViewModel.nativeAd != nil {
-
                 GoogleNativeAdView(
                     nativeViewModel: nativeViewModel,
                     style: .card
                 )
-                .frame(height: 380)  // 250 ~ 300
+                .frame(height: 380)
                 .padding(.horizontal)
             }
 
@@ -44,26 +49,32 @@ struct AdsView: View {
             )
             .frame(height: bannerAdPhase.adLoadFailed ? 0 : 60)
 
-            Button(action: {
+            Button("show interstitial") {
                 interstitialVM.showAd()
-            }) {
-                Text("show interstial")
             }
-            Button(action: {
+
+            Button("show rewarded") {
                 rewardedVM.showAd()
-            }) {
-                Text("show rewarded")
             }
-            Button(action: {
+
+            Button("show rewarded interstitial") {
                 rewardedInterstitalVM.showAd()
-            }) {
-                Text("show rewarded interstial")
             }
-            Button(action: {
+
+            Button("show appOpen") {
                 appOpenVM.showAdIfAvailable()
-            }) {
-                Text("show appOpen")
             }
+        }
+        .onAppear {
+            // ✅ 1. Combine Observer for Rewarded
+            rewardedObserver = RewardedAdObserver(publisher: rewardedVM)
+
+            // ✅ 2. Combine Observer for Interstitial
+            interstitialObserver = InterstitialAdObserver(publisher: interstitialVM)
+        }
+        .onChange(of: bannerAdPhase) { newValue in
+            // ✅ onChange Example
+            print("[BannerAdView] Phase changed to: \(newValue)")
         }
         .task {
             await rewardedVM.loadAd(
@@ -88,10 +99,7 @@ struct AdsView: View {
         .task {
             nativeViewModel.refreshAd()
         }
-
     }
-}
 
-#Preview {
-    AdsView()
+    @State private var hiddenNative = false
 }
