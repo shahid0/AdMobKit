@@ -79,7 +79,9 @@ private struct BannerViewContainer: UIViewRepresentable {
     func makeUIView(context: Context) -> BannerView {
         let banner = BannerView(adSize: adSize)
         // [START load_ad]
-        adPhase = .loading
+        DispatchQueue.main.async {
+            adPhase = .loading
+        }
         banner.adUnitID = AdUnitId
         banner.load(Request())
         // [END load_ad]
