@@ -151,7 +151,9 @@ public class InterstitialViewModel: NSObject, ObservableObject,
 
     public func loadAd(adUnitID: String) async {
         guard !(adPhase == .loading), interstitialAd == nil else { return }
-        adPhase = .loading
+        await MainActor.run(){
+            adPhase = .loading
+        }
         do {
             interstitialAd = try await InterstitialAd.load(
                 with: adUnitID,
@@ -159,7 +161,9 @@ public class InterstitialViewModel: NSObject, ObservableObject,
             )
 
             interstitialAd?.fullScreenContentDelegate = self
-            adPhase = .loaded
+            await MainActor.run(){
+                adPhase = .loaded
+            }
         } catch {
             print(
                 "Failed to load interstitial ad with error: \(error.localizedDescription)"
@@ -246,7 +250,9 @@ public class RewardedViewModel: NSObject, ObservableObject,
 
     public func loadAd(adUnitID: String) async {
         guard !(adPhase == .loading), rewardedAd == nil else { return }
-        adPhase = .loading
+        await MainActor.run(){
+            adPhase = .loading
+        }
         do {
             rewardedAd = try await RewardedAd.load(
                 with: adUnitID,
@@ -254,7 +260,9 @@ public class RewardedViewModel: NSObject, ObservableObject,
             )
             // [START set_the_delegate]
             rewardedAd?.fullScreenContentDelegate = self
-            adPhase = .loaded
+            await MainActor.run(){
+                adPhase = .loaded
+            }
             // [END set_the_delegate]
         } catch {
             print(
@@ -357,7 +365,9 @@ public class RewardedInterstitialViewModel: NSObject, ObservableObject,
         guard !(adPhase == .loading), rewardedInterstitialAd == nil else {
             return
         }
-        adPhase = .loading
+        await MainActor.run(){
+            adPhase = .loading
+        }
         do {
             rewardedInterstitialAd = try await RewardedInterstitialAd.load(
                 with: adUnitID,
@@ -365,7 +375,9 @@ public class RewardedInterstitialViewModel: NSObject, ObservableObject,
             )
             // [START set_the_delegate]
             rewardedInterstitialAd?.fullScreenContentDelegate = self
-            adPhase = .loaded
+            await MainActor.run(){
+                adPhase = .loaded
+            }
             // [END set_the_delegate]
         } catch {
             print(
@@ -471,7 +483,9 @@ public class AppOpenAdManager: NSObject, FullScreenContentDelegate,
         if adPhase == .loading || isAdAvailable() || Self.isInProScreen {
             return
         }
-        adPhase = .loading
+        await MainActor.run(){
+            adPhase = .loading
+        }
 
         do {
             appOpenAd = try await AppOpenAd.load(
@@ -480,7 +494,9 @@ public class AppOpenAdManager: NSObject, FullScreenContentDelegate,
             )
             appOpenAd?.fullScreenContentDelegate = self
             loadTime = Date()
-            adPhase = .loaded
+            await MainActor.run(){
+                adPhase = .loaded
+            }
         } catch {
             print(
                 "App open ad failed to load with error: \(error.localizedDescription)"
