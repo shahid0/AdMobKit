@@ -167,6 +167,9 @@ public class InterstitialViewModel: NSObject, ObservableObject,
                 adPhase = .loaded
             }
         } catch {
+            await MainActor.run(){
+                adPhase = .failed(error)
+            }
             print(
                 "Failed to load interstitial ad with error: \(error.localizedDescription)"
             )
@@ -267,6 +270,9 @@ public class RewardedViewModel: NSObject, ObservableObject,
             }
             // [END set_the_delegate]
         } catch {
+            await MainActor.run(){
+                adPhase = .failed(error)
+            }
             print(
                 "Failed to load rewarded ad with error: \(error.localizedDescription)"
             )
@@ -382,6 +388,9 @@ public class RewardedInterstitialViewModel: NSObject, ObservableObject,
             }
             // [END set_the_delegate]
         } catch {
+            await MainActor.run(){
+                adPhase = .failed(error)
+            }
             print(
                 "Failed to load rewarded interstitial ad with error: \(error.localizedDescription)"
             )
@@ -500,6 +509,9 @@ public class AppOpenAdManager: NSObject, FullScreenContentDelegate,
                 adPhase = .loaded
             }
         } catch {
+            await MainActor.run(){
+                adPhase = .failed(error)
+            }
             print(
                 "App open ad failed to load with error: \(error.localizedDescription)"
             )
